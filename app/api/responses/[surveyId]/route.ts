@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { memStore } from '@/lib/store'
+import { appendResponse } from '@/lib/excel-store'
 import { syncSurveyResponse } from '@/lib/moengage'
 import type { ResponseAnswer } from '@/types'
 
@@ -28,16 +29,6 @@ function corsHeaders(origin: string | null) {
 export async function OPTIONS(request: Request) {
   const origin = request.headers.get('origin')
   return new Response(null, { status: 204, headers: corsHeaders(origin) })
-}
-
-export async function GET(
-  request: Request,
-  { params }: { params: { surveyId: string } }
-) {
-  const origin = request.headers.get('origin')
-  const headers = corsHeaders(origin)
-  const responses = memStore.getResponses(params.surveyId)
-  return NextResponse.json({ responses }, { headers })
 }
 
 export async function POST(
@@ -99,23 +90,26 @@ export async function POST(
     return NextResponse.json({ error: 'respondent_email is required' }, { status: 400, headers })
   }
 
-  const response = memStore.addResponse(params.surveyId, {
-    survey_id: params.surveyId,
-    respondent_email: respondentEmail,
-    answers,
-  })
-
-  if (!response) {
+  // Save response to Excel file
+  try {
+    appendResponse(
+      params.surveyId,
+      survey.title,
+      respondentEmail,
+      answers.map(a => ({ question_text: a.question_text, answer_text: a.answer_text }))
+    )
+  } catch (err) {
+    console.error('[Excel store] appendResponse error:', err)
     return NextResponse.json({ error: 'Failed to save response' }, { status: 500, headers })
   }
 
-  // Sync to MoEngage asynchronously — don't block the email response
+  // Sync to MoEngage asynchronously — don't block the response
   syncSurveyResponse(respondentEmail, survey.title, survey.id, answers).catch(err =>
     console.error('[MoEngage sync error]', err)
   )
 
   return NextResponse.json(
-    { success: true, response_id: response.id },
+    { success: true },
     { status: 200, headers }
   )
 }

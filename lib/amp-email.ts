@@ -3,7 +3,7 @@ import type { Survey } from '@/types'
 export function generateAmpEmail(
   survey: Survey,
   appUrl: string,
-  recipientEmail = '{{email}}'
+  recipientEmail = '{{$email}}'
 ): string {
   const responseUrl = `${appUrl}/api/responses/${survey.id}`
   const fallbackUrl = `${appUrl}/s/${survey.id}`
