@@ -1,5 +1,5 @@
 {
-  "_note": "Living reference copy of Make.com scenario 9749179's blueprint, for a future Claude session to read without re-fetching. Always re-verify against mcp__Make__scenarios_get before editing anything live - this file can go stale. The Azure Cognitive Services subscription key that lives in this scenario's modules 3 and 4 (HTTP header 'Ocp-Apim-Subscription-Key') has been redacted below. Never write that key, or any other API key/token, into this repository - fetch it live from Make.com via scenarios_get when you actually need to inspect or debug it, and keep it out of git entirely.",
+  "_note": "Living reference copy of Make.com scenario 9749179's blueprint (v2, JSON2Video-based), for a future Claude session to read without re-fetching. Always re-verify against mcp__Make__scenarios_get before editing anything live - this file can go stale. No API keys or secrets are stored anywhere in this pipeline's config, unlike the retired v1 scenario (9559489), which had an Azure key hardcoded in plain text - that's one more reason v1 stays off.",
   "scenarioId": 9749179,
   "teamId": 825847,
   "name": "Next Level Education - Storytelling Video Agent (Claude)",
@@ -8,7 +8,7 @@
     {
       "id": 1,
       "module": "gemini-ai:createACompletionGeminiPro",
-      "purpose": "Writes the story: {narration, caption, video_theme} as strict JSON. See SKILL.md for the compliance rule this prompt encodes (no raw link/disclosure in the caption).",
+      "purpose": "Writes the story: {narration, caption, video_theme} as strict JSON. See SKILL.md for the compliance rule this prompt encodes (no raw link/disclosure in the caption) and the no-quotation-marks rule (works around a Make formula limitation, see SKILL.md's 'formula gotcha' section).",
       "connection": 13470580
     },
     {
@@ -18,50 +18,31 @@
     },
     {
       "id": 3,
-      "module": "http:MakeRequest",
-      "purpose": "Fetches a short-lived Azure Cognitive Services auth token for text-to-speech.",
-      "url": "https://southafricanorth.api.cognitive.microsoft.com/sts/v1.0/issueToken",
-      "headers": [{ "name": "Ocp-Apim-Subscription-Key", "value": "REDACTED-see-live-scenario-in-Make.com" }]
+      "module": "json2video:createmovie",
+      "purpose": "Builds a 1080x1920 vertical movie in one call: a looping background clip (picked by keyword-matching video_theme+narration against clips c01-c19, hosted on the user's own render service) plus an Azure-voiced ('en-NG-EzinneNeural', included free by JSON2Video - no separate Azure account needed) narration of the story text. Returns a project id.",
+      "connection": 14454403
     },
     {
       "id": 4,
-      "module": "http:MakeRequest",
-      "purpose": "Calls Azure TTS with the narration text (SSML), Nigerian-English voice en-NG-EzinneNeural, returns MP3 audio bytes.",
-      "url": "https://southafricanorth.tts.speech.microsoft.com/cognitiveservices/v1"
+      "module": "json2video:waitForAMovieToRender",
+      "purpose": "Blocks until the movie from step 3 finishes rendering, returns movie.url. This is the step that reports 'not enough credits' if the JSON2Video account's quota is exhausted.",
+      "connection": 14454403
     },
     {
       "id": 5,
-      "module": "google-drive:uploadAFile",
-      "purpose": "Uploads the narration MP3 to Google Drive so it has a fetchable URL.",
-      "connection": 13537121
-    },
-    {
-      "id": 6,
-      "module": "google-drive:shareAFileFolder",
-      "purpose": "Makes the uploaded MP3 publicly readable so the video-merge microservice can fetch it by URL.",
-      "connection": 13537121
-    },
-    {
-      "id": 8,
-      "module": "http:MakeRequest",
-      "purpose": "Calls the user's own render microservice with a background clip URL (picked by keyword-matching video_theme+narration against clips c01-c19) and the narration audio URL; returns a merged MP4.",
-      "url": "https://nle-video-merger.onrender.com/merge"
-    },
-    {
-      "id": 11,
       "module": "facebook-pages:UploadVideo",
-      "purpose": "Posts the merged video to the Next Level Education Facebook Page. Caption has URLs and any disclosure/affiliate wording stripped - the disclosure lives in the comment instead (module 12).",
+      "purpose": "Posts the rendered video (by URL, not re-uploaded as raw bytes) to the Next Level Education Facebook Page. Caption has URLs and any disclosure/affiliate wording stripped - the disclosure lives in the comment instead (module 7).",
       "connection": 14420987,
       "page_id": "483996708139472"
     },
     {
-      "id": 13,
+      "id": 6,
       "module": "util:FunctionSleep",
       "purpose": "Waits 90 seconds for Facebook to finish processing the video into a commentable post before the next step runs. Raise this if CreateComment keeps failing with 'object does not exist'.",
       "duration_seconds": 90
     },
     {
-      "id": 12,
+      "id": 7,
       "module": "facebook-pages:CreateComment",
       "purpose": "Comments the disclosed affiliate link underneath the post.",
       "connection": 14420987,
